@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sailfish OS RPM Repository Browser</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2333;--border:#30363d;
+  --text:#c9d1d9;--text-muted:#8b949e;--primary:#58a6ff;--primary-dim:rgba(56,139,253,.15);
+  --success:#3fb950;--warn:#d29922;--error:#f85149;--radius:8px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
+button{font:inherit;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);color:var(--text);padding:6px 14px;transition:background .15s}
+button:hover{background:var(--border)}
+button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}button.primary:hover{opacity:.85}
+button.danger{background:var(--error);color:#fff;border-color:var(--error)}button.danger:hover{opacity:.85}
+button:disabled{opacity:.4;cursor:default}
+input,select,textarea{font:inherit;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;outline:none;transition:border .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--primary)}
+select{cursor:pointer}textarea{resize:vertical}
+
+.container{max-width:1200px;margin:0 auto;padding:16px;box-sizing:border-box}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:16px}
+header h1{font-size:1.3rem;font-weight:600;display:flex;align-items:center;gap:10px}
+header h1 .logo{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#a371f7);display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
+.header-actions{display:flex;gap:8px}
+
+.main-content{width:100%}
+.config-bar,.repos,.search-section{width:100%;max-width:100%;box-sizing:border-box}
+.search-sticky-wrap{position:sticky;top:0;z-index:50;background:var(--surface);padding:14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.config-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:end;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px}
+.config-bar .field{display:flex;flex-direction:column;gap:4px}
+.config-bar .field label{font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.config-bar .field select,.config-bar .field input{min-width:160px}
+.search-bar select{min-width:100px}
+.config-bar .field.adapt-field{flex:1;min-width:200px}
+.config-bar .field.adapt-field input{width:100%}
+.release-wrap{position:relative}
+.release-dropdown{position:absolute;top:100%;left:0;right:0;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-height:280px;overflow-y:auto;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none}
+.release-dropdown.active{display:block}
+.release-dropdown .release-opt{padding:8px 12px;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border);transition:background .1s}
+.release-dropdown .release-opt:last-child{border-bottom:none}
+.release-dropdown .release-opt:hover{background:var(--surface2)}
+.release-dropdown .release-opt .ver{font-weight:600;color:var(--primary)}
+.release-dropdown .release-opt .meta{font-size:.78rem;color:var(--text-muted);margin-top:2px}
+
+.adapt-wrap{position:relative}
+.adapt-dropdown{position:absolute;top:100%;left:0;right:0;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-height:280px;overflow-y:auto;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none}
+.adapt-dropdown.active{display:block}
+.adapt-dropdown .adapt-opt{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border);transition:background .1s}
+.adapt-dropdown .adapt-opt:last-child{border-bottom:none}
+.adapt-dropdown .adapt-opt:hover{background:var(--surface2)}
+.adapt-dropdown .adapt-opt .adapt-name{font-weight:500;color:var(--primary);flex:1}
+.adapt-dropdown .adapt-opt .adapt-del{flex-shrink:0;padding:2px 8px;font-size:.75rem;color:var(--text-muted);opacity:.6;cursor:pointer;background:none;border:none}
+.adapt-dropdown .adapt-opt .adapt-del:disabled{opacity:.3;cursor:default}
+.adapt-dropdown .adapt-opt:hover .adapt-del:not(:disabled){opacity:1;color:var(--error)}
+
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1100;opacity:0;pointer-events:none;transition:opacity .2s}
+.confirm-overlay.active{opacity:1;pointer-events:auto}
+.confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;min-width:280px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.confirm-box p{margin-bottom:16px}
+
+section.repos{margin-bottom:16px}
+section.repos h2{font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.repo-grid{display:grid;gap:8px}
+.repo-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem;transition:border-color .15s}
+.repo-item:hover{border-color:var(--text-muted)}
+.repo-item .repo-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'SF Mono',Consolas,'Liberation Mono',Menlo,monospace;font-size:.82rem}
+.repo-item .status{font-size:.75rem;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.status.cached{background:rgba(63,185,80,.15);color:var(--success)}
+.status.loading{background:rgba(210,153,34,.15);color:var(--warn)}
+.status.error{background:rgba(248,81,73,.15);color:var(--error)}
+.status.empty{background:rgba(139,148,158,.1);color:var(--text-muted)}
+.repo-actions{display:flex;gap:6px}
+.repo-actions button{padding:4px 10px;font-size:.8rem}
+.bulk-actions{display:flex;gap:8px;margin-top:10px}
+
+.search-section{padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;min-width:0}
+.search-bar{display:flex;gap:10px;margin-bottom:0;min-width:0}
+.search-bar input{flex:1;min-width:0;font-size:1rem;padding:10px 14px}
+.search-bar button{font-size:1rem;padding:10px 20px}
+
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.results-header h2{font-size:1rem}
+.results-header .count{color:var(--text-muted);font-size:.85rem}
+
+.pkg-list{display:grid;gap:10px;min-width:0}
+.pkg-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color .15s}
+.pkg-card:hover{border-color:var(--text-muted)}
+.pkg-card .pkg-title{font-weight:600;font-size:1rem;color:var(--primary);margin-bottom:2px}
+.pkg-card .pkg-meta{font-size:.82rem;color:var(--text-muted);margin-bottom:6px;font-family:'SF Mono',Consolas,monospace}
+.pkg-card .pkg-summary{font-size:.9rem;margin-bottom:8px}
+.pkg-card .pkg-repo{font-size:.78rem;color:var(--text-muted);margin-bottom:8px;word-break:break-all}
+.pkg-card .pkg-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.active{opacity:1;pointer-events:auto}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-header h3{font-size:1.05rem}
+.modal-header button{background:none;border:none;color:var(--text-muted);font-size:1.4rem;padding:0;line-height:1}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-body .form-group{margin-bottom:16px}
+.modal-body .form-group label{display:block;font-size:.85rem;color:var(--text-muted);margin-bottom:4px}
+.modal-body .form-group input,.modal-body .form-group textarea{width:100%}
+.modal-body .form-group textarea{min-height:140px;font-family:'SF Mono',Consolas,monospace;font-size:.82rem;line-height:1.6}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border);flex-wrap:wrap;flex-shrink:0}
+
+.deps-list{list-style:none}
+.deps-list li{padding:5px 0;border-bottom:1px solid var(--border);font-size:.9rem;display:flex;justify-content:space-between;align-items:center}
+.deps-list li:last-child{border:none}
+.deps-list .dep-name{font-family:'SF Mono',Consolas,monospace;font-size:.85rem}
+.deps-list .dep-right{display:flex;align-items:center;gap:8px}
+.deps-list .dep-repo{font-size:.75rem;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deps-list .dep-dl-btn{padding:2px 8px;font-size:.75rem}
+.deps-list .dep-dl-btn.downloaded{color:var(--success);opacity:.9}
+.deps-list .dep-avail{font-size:.75rem;padding:1px 8px;border-radius:10px}
+.dep-avail.found{background:rgba(63,185,80,.15);color:var(--success)}
+.dep-avail.missing{background:rgba(248,81,73,.1);color:var(--error)}
+.dep-name.clickable{cursor:pointer!important;color:var(--primary)}.dep-name.clickable:hover{text-decoration:underline}
+
+.pkg-card{cursor:pointer}
+.pkg-card-detail .info-row{display:flex;gap:12px;margin-bottom:10px;font-size:.9rem}
+.pkg-card-detail .info-label{min-width:100px;color:var(--text-muted);flex-shrink:0}
+.pkg-card-detail .info-value{word-break:break-word;font-family:'SF Mono',Consolas,monospace;font-size:.85rem}
+.pkg-card-detail .section{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.pkg-card-detail .section-title{font-size:.85rem;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.pkg-card-detail .description{white-space:pre-wrap;font-size:.9rem;line-height:1.6}
+.pkg-card-detail .provides-list,.pkg-card-detail .requires-list,.pkg-card-detail .files-list{font-family:'SF Mono',Consolas,monospace;font-size:.82rem}
+.pkg-card-detail .provides-list span,.pkg-card-detail .requires-list span{display:inline-block;margin:2px 8px 2px 0;padding:2px 6px;background:var(--surface2);border-radius:4px}
+.pkg-card-detail .files-list{max-height:200px;overflow-y:auto;padding:8px;background:var(--surface2);border-radius:var(--radius);white-space:pre-wrap;word-break:break-all;line-height:1.5}
+.pkg-card-detail .files-unavail{font-size:.85rem;color:var(--text-muted);margin:0}
+
+#toasts{position:fixed;top:16px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 18px;border-radius:var(--radius);font-size:.9rem;animation:slideIn .3s;min-width:260px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.toast-info{background:#1f6feb;color:#fff}.toast-success{background:#238636;color:#fff}
+.toast-warn{background:#9e6a03;color:#fff}.toast-error{background:#da3633;color:#fff}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.empty-state{text-align:center;padding:48px 20px;color:var(--text-muted)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:12px}
+.empty-state p{font-size:.95rem}
+
+.cache-info{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);font-size:.85rem;margin-top:8px}
+.cache-info .cache-size{color:var(--primary);font-weight:600}
+
+.template-list{width:100%;border-collapse:separate;border-spacing:0 8px}
+.template-list td{padding:4px 8px 4px 0;vertical-align:middle}
+.template-list td:nth-child(1){width:36px;min-width:36px;white-space:nowrap;padding-right:8px}
+.template-list td:nth-child(2){width:auto}
+.template-list td:nth-child(3){width:1%;white-space:nowrap}
+.template-list .template-row input[type="text"]{width:100%;font-family:'SF Mono',Consolas,monospace;font-size:.82rem;box-sizing:border-box}
+.template-list .template-row input[type="checkbox"]{cursor:pointer;width:18px;height:18px}
+.template-list .template-row.template-disabled input[type="text"]{opacity:.6}
+.template-list .template-row button{padding:4px 10px;font-size:.8rem}
+.template-list th{text-align:left;font-size:.8rem;color:var(--text-muted);padding:4px 8px 4px 0;font-weight:500}
+.template-list.proxy-list td:nth-child(1){width:auto}
+.template-list.proxy-list td:nth-child(2){width:140px;min-width:140px}
+.template-list.proxy-list td:nth-child(3){width:1%;white-space:nowrap}
+.template-list.proxy-list select{width:100%;min-width:0}
+.template-help{font-size:.8rem;color:var(--text-muted);margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);line-height:1.6}
+.template-help summary{cursor:pointer;color:var(--primary)}
+.template-help code{font-family:'SF Mono',Consolas,monospace;font-size:.78rem;background:var(--surface);padding:1px 4px;border-radius:4px}
+
+.auth-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:var(--radius);margin-bottom:16px;font-size:.9rem;color:var(--warn)}
+
+@media(max-width:700px){
+  .config-bar{flex-direction:column;align-items:stretch}
+  .config-bar .field{width:100%;min-width:0}
+  .config-bar .field select,.config-bar .field input{min-width:0;width:100%;box-sizing:border-box}
+}
+</style>
+<script src="translations-en.js"></script>
+<script src="translations-ru.js"></script>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1><span class="logo">R</span>Sailfish OS RPM Repository Browser</h1>
+    <div class="header-actions">
+      <button onclick="showSettings()" data-i18n="settings">Settings</button>
+    </div>
+  </header>
+
+  <div id="authBanner" class="auth-banner" style="display:none" data-i18n="authBanner"></div>
+
+  <div class="main-content">
+  <div class="config-bar">
+    <div class="field release-wrap">
+      <label>Release</label>
+      <input id="inpRelease" list="releaseList" data-i18n-placeholder="placeholderSelect" onfocus="showReleaseDropdown()" onclick="showReleaseDropdown()">
+      <datalist id="releaseList"></datalist>
+      <div id="releaseDropdown" class="release-dropdown"></div>
+    </div>
+    <div class="field">
+      <label>Arch</label>
+      <select id="selArch">
+        <option value="armv7hl">armv7hl</option>
+        <option value="aarch64" selected>aarch64</option>
+        <option value="i486">i486</option>
+      </select>
+    </div>
+    <div class="field adapt-field adapt-wrap">
+      <label>Adaptation</label>
+      <input id="inpAdaptation" data-i18n-placeholder="placeholderSelect" onfocus="showAdaptDropdown()" onclick="showAdaptDropdown()">
+      <div id="adaptDropdown" class="adapt-dropdown"></div>
+    </div>
+  </div>
+
+  <section class="repos">
+    <h2><span data-i18n="repos"></span> <span id="repoCount" style="color:var(--text-muted);font-weight:400;font-size:.85rem"></span></h2>
+    <div id="repoGrid" class="repo-grid"></div>
+    <div class="bulk-actions">
+      <button class="primary" onclick="refreshAllRepos()" data-i18n="refreshAll"></button>
+      <button class="danger" onclick="confirmClearCache()" data-i18n="clearCache"></button>
+      <button onclick="loadAllRepos()" data-i18n="loadAll"></button>
+      <button onclick="refreshSystemDeps()" data-i18n="refreshSystem"></button>
+      <button onclick="showSystemTree()" data-i18n="systemTree"></button>
+      <span id="cacheStatus" style="font-size:.82rem;color:var(--text-muted);margin-left:8px"></span>
+    </div>
+  </div>
+
+  <div class="search-sticky-wrap">
+    <div class="search-bar">
+      <input id="searchInput" type="text" data-i18n-placeholder="searchPlaceholder" onkeydown="if(event.key==='Enter')doSearch()">
+      <select id="searchType">
+        <option value="name">name</option>
+        <option value="file">file</option>
+        <option value="requires">requires</option>
+        <option value="provides">provides</option>
+      </select>
+      <button class="primary" onclick="doSearch()" data-i18n="search"></button>
+    </div>
+  </div>
+  <section class="search-section">
+    <div class="results-header" id="resultsHeader" style="display:none">
+      <h2 id="resultsHeading"></h2>
+      <span class="count" id="resultsCount"></span>
+    </div>
+    <div id="resultsList" class="pkg-list"></div>
+    <div id="emptyState" class="empty-state">
+      <div class="icon">&#128230;</div>
+      <p data-i18n="emptyState"></p>
+    </div>
+  </section>
+  </div>
+</div>
+
+<div id="settingsOverlay" class="modal-overlay" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-header"><h3 data-i18n="settings"></h3><button onclick="closeSettings()">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Release domain</label>
+        <input id="cfgReleaseDomain" value="https://releases.jolla.com">
+      </div>
+      <div class="form-group">
+        <label>Secure domain</label>
+        <input id="cfgSecureDomain" value="https://store-repository.jolla.com">
+      </div>
+      <div class="form-group">
+        <label data-i18n="loginLabel"></label>
+        <input id="cfgUsername" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label data-i18n="passwordLabel"></label>
+        <input id="cfgPassword" type="password" autocomplete="current-password">
+        <small style="display:block;margin-top:4px;color:var(--text-muted);font-size:.82rem" data-i18n="passwordHint"></small>
+      </div>
+      <div class="form-group">
+        <label data-i18n="repoTemplates"></label>
+        <details class="template-help" id="templateHelpDetails">
+          <summary data-i18n="templateSubst"></summary>
+          <div id="templateHelpContent" style="margin-top:8px"></div>
+        </details>
+        <table class="template-list"><tbody id="cfgRepoTemplatesList"></tbody></table>
+        <button type="button" onclick="addRepoTemplateRow()" style="margin-top:8px" data-i18n="add"></button>
+      </div>
+      <div class="form-group">
+        <label data-i18n="corsProxies"></label>
+        <small style="display:block;margin-bottom:6px;color:var(--text-muted);font-size:.82rem" data-i18n="corsProxyHint"></small>
+        <table class="template-list proxy-list"><thead><tr><th data-i18n="corsProxyUrl"></th><th data-i18n="corsProxyAuth"></th><th></th></tr></thead><tbody id="cfgCorsProxiesList"></tbody></table>
+        <button type="button" onclick="addCorsProxyRow()" style="margin-top:8px" data-i18n="add"></button>
+      </div>
+      <div class="form-group">
+        <label data-i18n="systemBaseDeps"></label>
+        <small style="display:block;margin-bottom:6px;color:var(--text-muted);font-size:.82rem" data-i18n="systemBaseDepsHint"></small>
+        <textarea id="cfgSystemBaseDeps" rows="4" placeholder="patterns-sailfish-device-configuration-$adaptation&#10;feature-jolla" style="font-family:'SF Mono',Consolas,monospace;font-size:.85rem"></textarea>
+      </div>
+      <div class="cache-info">
+        <span data-i18n="cache"></span> <span id="cacheSize" class="cache-size">0 KB</span>
+        <button onclick="confirmClearCache()" data-i18n="clearAllCache"></button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeSettings()" data-i18n="cancel"></button>
+      <button class="primary" onclick="saveSettings()" data-i18n="save"></button>
+    </div>
+  </div>
+</div>
+
+<div id="pkgCardOverlay" class="modal-overlay" onclick="if(event.target===this)closePkgCard()">
+  <div class="modal" style="max-width:600px;min-width:320px">
+    <div class="modal-header"><h3 id="pkgCardTitle" data-i18n="package"></h3><button onclick="closePkgCard()">&times;</button></div>
+    <div class="modal-body" id="pkgCardBody"></div>
+    <div class="modal-footer">
+      <button id="pkgCardBack" onclick="pkgCardBack()" style="display:none" data-i18n="back"></button>
+      <a id="pkgCardDownload" href="#" target="_blank"><button class="primary" data-i18n="download"></button></a>
+      <button id="pkgCardDepsDownload" onclick="openDepsFromCard(false)" style="display:none" data-i18n="deps"></button>
+      <button id="pkgCardDepsRepo" onclick="openDepsFromCard(true)" style="display:none" data-i18n="depsRepo"></button>
+      <button id="pkgCardDepsSystem" onclick="openSystemDepsFromCard()" style="display:none" data-i18n="depsSystem"></button>
+      <button onclick="showPkgXml()">XML</button>
+      <button onclick="closePkgCard()" data-i18n="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="pkgXmlOverlay" class="modal-overlay" onclick="if(event.target===this)closePkgXml()">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-header"><h3 id="pkgXmlTitle" data-i18n="xmlTitle"></h3><button onclick="closePkgXml()">&times;</button></div>
+    <div class="modal-body"><pre id="pkgXmlContent" style="margin:0;font-size:.8rem;overflow:auto;max-height:70vh;white-space:pre-wrap;word-break:break-all"></pre></div>
+    <div class="modal-footer">
+      <button onclick="copyPkgXml()" data-i18n="copy"></button>
+      <button onclick="closePkgXml()" data-i18n="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="depsOverlay" class="modal-overlay" onclick="if(event.target===this)closeDeps()">
+  <div class="modal">
+    <div class="modal-header"><h3 id="depsTitle" data-i18n="deps"></h3><button onclick="closeDeps()">&times;</button></div>
+    <div class="modal-body">
+      <div id="depsContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="downloadDepsList()" data-i18n="downloadList"></button>
+      <button onclick="closeDeps()" data-i18n="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="systemDepsOverlay" class="modal-overlay" onclick="if(event.target===this)closeSystemDeps()">
+  <div class="modal">
+    <div class="modal-header"><h3 id="systemDepsTitle" data-i18n="depsSystemTitle"></h3><button onclick="closeSystemDeps()">&times;</button></div>
+    <div class="modal-body">
+      <div id="systemDepsContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="downloadSystemDepsList()" data-i18n="downloadList"></button>
+      <button onclick="closeSystemDeps()" data-i18n="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="systemTreeOverlay" class="modal-overlay" onclick="if(event.target===this)closeSystemTree()">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><h3 id="systemTreeTitle" data-i18n="systemTreeTitle"></h3><button onclick="closeSystemTree()">&times;</button></div>
+    <div class="modal-body">
+      <div id="systemTreeContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="downloadSystemTreeList()" data-i18n="downloadList"></button>
+      <button onclick="closeSystemTree()" data-i18n="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmOverlay" class="confirm-overlay" onclick="if(event.target===this)closeConfirm()">
+  <div class="confirm-box">
+    <p id="confirmText"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeConfirm()" data-i18n="cancel"></button>
+      <button class="primary" id="confirmBtn" onclick="runConfirmAction()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ===== i18n ===== */
+const L = (navigator.language || navigator.userLanguage || '').toLowerCase().startsWith('ru') ? 'ru' : 'en';
+const T = L === 'ru' ? (window.T_RU || {}) : (window.T_EN || {});
+const T_FALLBACK = window.T_EN || {};
+function t(key, params) {
+  let s = T[key] || T_FALLBACK[key] || key;
+  if (params) for (const k in params) s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), params[k]);
+  return s;
+}
+function applyTranslations() {
+  document.documentElement.lang = L;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  const h = document.getElementById('resultsHeading');
+  if (h) h.textContent = t('results');
+}
+
+const KNOWN_ADAPTATIONS = [
+  'adaptation-reeder-s19mps',
+  'adaptation-qualcomm-sony-ganges',
+  'adaptation-qualcomm-sony-seine',
+  'adaptation-qualcomm-sony-lena',
+  'adaptation-qualcomm-sony-murray',
+  'adaptation-qualcomm-sony-zambezi',
+  'adaptation-qualcomm-sony-keyaki',
+  'adaptation-qualcomm-sony-loire',
+  'adaptation-qualcomm-sony-nile',
+];
+const ADAPT_CACHE_KEY = 'rpm_adaptations';
+
+const DEFAULT_CORS_PROXIES = [];
+
+const DEFAULT_TEMPLATES = [
+  '$releaseDomain/releases/$release/jolla-hw/adaptation-common/$arch/',
+  '$secureDomain/releases/$release/jolla-hw/$adaptation/$arch/',
+  '$secureDomain/features/$release/appsupport/$arch/',
+  '$releaseDomain/jolla-apps/$release/$arch/',
+  '$releaseDomain/features/$release/customers/jolla/$arch/',
+  '$releaseDomain/releases/$release/hotfixes/$arch/',
+  '$releaseDomain/releases/$release/jolla/$arch/',
+  '$secureDomain/features/$release/sailfish-eas/$arch/',
+  '$secureDomain/features/$release/xt9/$arch/',
+];
+
+const SYSTEM_DEP_PATTERNS = [
+  /^rpmlib\(/,
+  /^rtld\(/,
+  /^config\(/,
+  /^pkgconfig\(/,
+  /^\//,
+  /\.so/,
+];
+
+const DEFAULT_SYSTEM_BASE_DEPS = 'patterns-sailfish-device-configuration-$adaptation\nfeature-jolla';
+
+const state = {
+  releases: [],
+  settings: loadSettingsFromStorage(),
+  repos: [],
+  allPackages: [],
+  searchResults: [],
+  currentDepsPkg: null,
+  systemPreinstalled: new Set(),
+  systemPreinstalledCount: 0,
+};
+
+function normalizeRepoTemplates(arr) {
+  if (!Array.isArray(arr)) return DEFAULT_TEMPLATES.map(t => ({ template: t, enabled: true }));
+  return arr.map(item =>
+    typeof item === 'string' ? { template: item, enabled: true } : { template: item.template || '', enabled: item.enabled !== false }
+  ).filter(x => x.template);
+}
+
+function normalizeCorsProxies(arr) {
+  if (!Array.isArray(arr)) return DEFAULT_CORS_PROXIES.map(p => ({ ...p }));
+  return arr.map(item => {
+    const p = typeof item === 'string' ? { template: item, authType: 'header' } : item;
+    const at = p.authType;
+    const authType = at === 'query' || at === 'corsfix' || at === 'corsHeaders' ? at : 'header';
+    return { template: p.template || '', authType };
+  }).filter(x => x.template);
+}
+
+function loadSettingsFromStorage() {
+  try {
+    const s = JSON.parse(localStorage.getItem('rpm_settings'));
+    if (s) {
+      s.repoTemplates = normalizeRepoTemplates(s.repoTemplates);
+      s.corsProxies = normalizeCorsProxies(s.corsProxies);
+      if (s.systemBaseDeps == null) s.systemBaseDeps = DEFAULT_SYSTEM_BASE_DEPS;
+      return s;
+    }
+  } catch {}
+  return {
+    releaseDomain: 'https://releases.jolla.com',
+    secureDomain: 'https://store-repository.jolla.com',
+    username: '',
+    password: '',
+    repoTemplates: DEFAULT_TEMPLATES.map(t => ({ template: t, enabled: true })),
+    corsProxies: DEFAULT_CORS_PROXIES.map(p => ({ ...p })),
+    systemBaseDeps: DEFAULT_SYSTEM_BASE_DEPS,
+  };
+}
+
+function persistSettings() {
+  localStorage.setItem('rpm_settings', JSON.stringify(state.settings));
+}
+
+/* ===== Toast ===== */
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+/* ===== Fetch с авто-выбором CORS прокси ===== */
+let workingProxyIndex = -1;
+
+function getCorsProxies() {
+  return state.settings.corsProxies || [];
+}
+
+function isUrlInPath(template) {
+  if (!template || !template.includes('$url')) return false;
+  const qIdx = template.indexOf('?');
+  return qIdx === -1 || template.indexOf('$url') < qIdx;
+}
+
+async function fetchViaProxy(targetUrl, proxy, extraHeaders = {}) {
+  const useRawUrl = isUrlInPath(proxy.template);
+  const urlPart = useRawUrl ? targetUrl : encodeURIComponent(targetUrl);
+  const proxyUrl = (proxy.template || '').replace(/\$url/g, urlPart);
+  const at = proxy.authType;
+  let headers = {};
+  if (at === 'corsfix' && Object.keys(extraHeaders).length) {
+    headers['x-corsfix-headers'] = JSON.stringify(extraHeaders);
+  } else if (at === 'corsHeaders' && Object.keys(extraHeaders).length) {
+    headers['x-cors-headers'] = JSON.stringify(extraHeaders);
+  } else if ((at === 'header') && Object.keys(extraHeaders).length) {
+    headers = extraHeaders;
+  }
+  const resp = await fetch(proxyUrl, Object.keys(headers).length ? { headers } : {});
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp;
+}
+
+function is401Response(text) {
+  if (!text || typeof text !== 'string') return false;
+  const lower = text.toLowerCase();
+  return (lower.includes('401') || lower.includes('authorization required')) && lower.includes('<html');
+}
+
+async function pFetch(url) {
+  const s = state.settings;
+  const authHeader = s.username && s.password && needsAuth(url)
+    ? { 'Authorization': 'Basic ' + btoa(s.username + ':' + s.password) }
+    : {};
+  let targetUrl = url;
+  if (s.username && s.password && needsAuth(url)) {
+    try {
+      const u = new URL(url);
+      u.username = s.username;
+      u.password = s.password;
+      targetUrl = u.toString();
+    } catch {}
+  }
+
+  const tryDirect = async () => {
+    const resp = await fetch(url, { headers: authHeader });
+    const text = await resp.text();
+    if (resp.status === 401 || is401Response(text)) {
+      document.getElementById('authBanner').style.display = '';
+      throw new Error('AUTH_REQUIRED');
+    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return { ok: true, text: () => Promise.resolve(text) };
+  };
+
+  const tryProxies = async () => {
+    const proxies = getCorsProxies();
+    if (!proxies.length) throw new Error(t('corsFailed'));
+    const start = workingProxyIndex >= 0 ? workingProxyIndex : 0;
+    const maxPasses = 3;
+    for (let pass = 0; pass < maxPasses; pass++) {
+      for (let i = 0; i < proxies.length; i++) {
+        const idx = (start + i) % proxies.length;
+        const proxy = proxies[idx];
+        const proxyTargetUrl = proxy.authType === 'query' ? targetUrl : url;
+        const proxyHeaders = proxy.authType === 'query' ? {} : authHeader;
+        try {
+          const resp = await fetchViaProxy(proxyTargetUrl, proxy, proxyHeaders);
+          const text = await resp.text();
+          if (is401Response(text)) {
+            document.getElementById('authBanner').style.display = '';
+            if (!s.username || !s.password) {
+              toast(t('authRequired'), 'warn');
+            }
+            throw new Error('AUTH_REQUIRED');
+          }
+          workingProxyIndex = idx;
+          return { ok: true, text: () => Promise.resolve(text) };
+        } catch (e) {
+          if (e.message === 'AUTH_REQUIRED') throw e;
+          workingProxyIndex = -1;
+        }
+      }
+    }
+    throw new Error(t('corsFailed'));
+  };
+
+  try {
+    return await tryDirect();
+  } catch (e) {
+    if (e.message === 'AUTH_REQUIRED') throw e;
+    return await tryProxies();
+  }
+}
+
+async function pFetchGzip(url) {
+  const s = state.settings;
+  const authHeader = s.username && s.password && needsAuth(url)
+    ? { 'Authorization': 'Basic ' + btoa(s.username + ':' + s.password) }
+    : {};
+  let targetUrl = url;
+  if (s.username && s.password && needsAuth(url)) {
+    try {
+      const u = new URL(url);
+      u.username = s.username;
+      u.password = s.password;
+      targetUrl = u.toString();
+    } catch {}
+  }
+
+  const tryDirect = async () => {
+    const resp = await fetch(url, { headers: authHeader });
+    const ab = await resp.arrayBuffer();
+    const text = new TextDecoder().decode(ab.slice(0, 512));
+    if (resp.status === 401 || is401Response(text)) {
+      document.getElementById('authBanner').style.display = '';
+      throw new Error('AUTH_REQUIRED');
+    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const decompressed = await decompressGzip(ab);
+    return { ok: true, text: () => Promise.resolve(decompressed) };
+  };
+
+  const tryProxies = async () => {
+    const proxies = getCorsProxies();
+    if (!proxies.length) throw new Error(t('corsFailed'));
+    const start = workingProxyIndex >= 0 ? workingProxyIndex : 0;
+    const maxPasses = 3;
+    for (let pass = 0; pass < maxPasses; pass++) {
+      for (let i = 0; i < proxies.length; i++) {
+        const idx = (start + i) % proxies.length;
+        const proxy = proxies[idx];
+        const proxyTargetUrl = proxy.authType === 'query' ? targetUrl : url;
+        const proxyHeaders = proxy.authType === 'query' ? {} : authHeader;
+        try {
+          const resp = await fetchViaProxy(proxyTargetUrl, proxy, proxyHeaders);
+          const ab = await resp.arrayBuffer();
+          const head = new TextDecoder().decode(ab.slice(0, 512));
+          if (is401Response(head)) {
+            document.getElementById('authBanner').style.display = '';
+            if (!s.username || !s.password) {
+              toast(t('authRequired'), 'warn');
+            }
+            throw new Error('AUTH_REQUIRED');
+          }
+          const decompressed = await decompressGzip(ab);
+          workingProxyIndex = idx;
+          return { ok: true, text: () => Promise.resolve(decompressed) };
+        } catch (e) {
+          if (e.message === 'AUTH_REQUIRED') throw e;
+          workingProxyIndex = -1;
+        }
+      }
+    }
+    throw new Error(t('corsFailed'));
+  };
+
+  try {
+    return await tryDirect();
+  } catch (e) {
+    if (e.message === 'AUTH_REQUIRED') throw e;
+    return await tryProxies();
+  }
+}
+
+async function decompressGzip(arrayBuffer) {
+  const ds = new DecompressionStream('gzip');
+  const blob = await new Response(new Blob([arrayBuffer]).stream().pipeThrough(ds)).blob();
+  return new TextDecoder().decode(await blob.arrayBuffer());
+}
+
+function needsAuth(url) {
+  const s = state.settings;
+  return url.includes(s.secureDomain) || url.includes(s.releaseDomain);
+}
+
+/* ===== Releases ===== */
+async function loadReleases() {
+  const inp = document.getElementById('inpRelease');
+  const list = document.getElementById('releaseList');
+  try {
+    const resp = await pFetch('https://coderus.openrepos.net/sailversion');
+    const text = await resp.text();
+    const re = /^(\d+\.\d+\.\d+\.\d+)\s*-\s*(.+?)\s*-\s*(\d{2}\s+\w+\s+\d{4})/gm;
+    const releases = [];
+    const seen = new Set();
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const ver = m[1];
+      if (!seen.has(ver)) { seen.add(ver); releases.push({ version: ver, name: m[2].trim(), date: m[3].trim() }); }
+    }
+    releases.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+    state.releases = releases;
+    list.innerHTML = releases.map(r =>
+      `<option value="${r.version}">${r.version} — ${r.name} (${r.date})</option>`
+    ).join('');
+    const needLatest = !inp.value || inp.value.trim().toLowerCase() === 'latest';
+    if (releases.length && needLatest) {
+      inp.value = releases[0].version;
+    }
+    updateRepoList();
+  } catch (e) {
+    inp.placeholder = t('releaseManual');
+    toast(t('loadReleasesFailed') + e.message, 'error');
+  }
+}
+
+function showReleaseDropdown() {
+  const dd = document.getElementById('releaseDropdown');
+  if (!state.releases.length) return;
+  dd.innerHTML = state.releases.map(r =>
+    `<div class="release-opt" data-ver="${esc(r.version)}">
+      <span class="ver">${esc(r.version)}</span>
+      <div class="meta">${esc(r.name)} · ${esc(r.date)}</div>
+    </div>`
+  ).join('');
+  dd.classList.add('active');
+  dd.querySelectorAll('.release-opt').forEach(el => {
+    el.onclick = () => {
+      document.getElementById('inpRelease').value = el.dataset.ver;
+      hideReleaseDropdown();
+      saveLastConfig();
+      updateRepoList();
+    };
+  });
+}
+
+function hideReleaseDropdown() {
+  document.getElementById('releaseDropdown').classList.remove('active');
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.release-wrap');
+  if (wrap && !wrap.contains(e.target)) hideReleaseDropdown();
+  const adaptWrap = document.querySelector('.adapt-wrap');
+  if (adaptWrap && !adaptWrap.contains(e.target)) hideAdaptDropdown();
+});
+
+function getAdaptations() {
+  const custom = [];
+  try {
+    const raw = localStorage.getItem(ADAPT_CACHE_KEY);
+    if (raw) custom.push(...JSON.parse(raw));
+  } catch {}
+  const seen = new Set([...KNOWN_ADAPTATIONS, ...custom]);
+  return [...KNOWN_ADAPTATIONS, ...custom.filter(c => !KNOWN_ADAPTATIONS.includes(c))];
+}
+
+function saveAdaptation(value) {
+  const list = getAdaptations();
+  if (list.includes(value)) return;
+  const custom = list.filter(a => !KNOWN_ADAPTATIONS.includes(a));
+  custom.push(value);
+  localStorage.setItem(ADAPT_CACHE_KEY, JSON.stringify(custom));
+}
+
+function removeAdaptation(value) {
+  const list = getAdaptations().filter(a => a !== value);
+  const custom = list.filter(a => !KNOWN_ADAPTATIONS.includes(a));
+  localStorage.setItem(ADAPT_CACHE_KEY, JSON.stringify(custom));
+}
+
+function showAdaptDropdown() {
+  const dd = document.getElementById('adaptDropdown');
+  const adaptations = getAdaptations();
+  dd.innerHTML = adaptations.map(a => {
+    const isKnown = KNOWN_ADAPTATIONS.includes(a);
+    return `<div class="adapt-opt" data-val="${esc(a)}">
+      <span class="adapt-name">${esc(a)}</span>
+      <button type="button" class="adapt-del" ${isKnown ? `disabled title="${t('standardAdapt')}"` : ''} data-val="${esc(a)}">✕</button>
+    </div>`;
+  }).join('');
+  dd.classList.add('active');
+  dd.querySelectorAll('.adapt-opt').forEach(el => {
+    el.onclick = (e) => {
+      if (e.target.classList.contains('adapt-del')) {
+        e.stopPropagation();
+        if (!e.target.disabled) confirmRemoveAdapt(e.target.dataset.val);
+      } else {
+        document.getElementById('inpAdaptation').value = el.dataset.val;
+        hideAdaptDropdown();
+        saveLastConfig();
+        updateRepoList();
+      }
+    };
+  });
+}
+
+function hideAdaptDropdown() {
+  document.getElementById('adaptDropdown').classList.remove('active');
+}
+
+let _confirmAction = null;
+
+function confirmRemoveAdapt(val) {
+  if (KNOWN_ADAPTATIONS.includes(val)) return;
+  document.getElementById('confirmText').textContent = t('removeAdaptConfirm', { val });
+  _confirmAction = () => {
+    removeAdaptation(val);
+    hideAdaptDropdown();
+    showAdaptDropdown();
+    updateRepoList();
+    toast(t('adaptRemoved'), 'info');
+  };
+  document.getElementById('confirmOverlay').classList.add('active');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmOverlay').classList.remove('active');
+  _confirmAction = null;
+}
+
+function runConfirmAction() {
+  if (_confirmAction) _confirmAction();
+  closeConfirm();
+}
+
+/* ===== Repo URL resolution ===== */
+function resolveTemplate(tpl, archOverride) {
+  const s = state.settings;
+  const release = document.getElementById('inpRelease').value.trim();
+  const arch = archOverride ?? document.getElementById('selArch').value;
+  const adaptation = document.getElementById('inpAdaptation').value;
+  let url = tpl
+    .replace(/\$releaseDomain/g, s.releaseDomain)
+    .replace(/\$secureDomain/g, s.secureDomain)
+    .replace(/\$release/g, release)
+    .replace(/\$arch/g, arch)
+    .replace(/\$adaptation/g, adaptation);
+  if (!url.endsWith('/')) url += '/';
+  return url;
+}
+
+function resolveTemplateNoarch(tpl) {
+  return resolveTemplate(tpl, 'noarch');
+}
+
+function templateNeedsAdaptation(tpl) {
+  return tpl.includes('$adaptation');
+}
+
+function templateUsesSecureDomain(tpl) {
+  return tpl.includes('$secureDomain');
+}
+
+function templateShortName(tpl) {
+  let s = tpl
+    .replace(/\$releaseDomain/g, '').replace(/\$secureDomain/g, '')
+    .replace(/\/releases\//g, '/').replace(/\/features\//g, '/')
+    .replace(/\$release/g, '').replace(/\$arch/g, '').replace(/\$adaptation/g, '{adapt}')
+    .replace(/\/+/g, '/').replace(/^\/|\/$/g, '');
+  if (s === 'jolla-hw/{adapt}') return 'adaptation';
+  if (s === 'jolla-hw/adaptation-common') return 'adaptation-common';
+  if (s === 'customers/jolla') return 'customers-jolla';
+  return s;
+}
+
+function filterExcludedPackages(packages) {
+  return packages.filter(p => {
+    const arch = (p.arch || '').toLowerCase();
+    const name = (p.name || '').toLowerCase();
+    if (arch === 'src' || arch === 'nosrc') return false;
+    if (name.endsWith('-debuginfo') || name.endsWith('-debugsource') || name.endsWith('-src')) return false;
+    if (name.includes('-debug-')) return false;
+    return true;
+  });
+}
+
+/* ===== Repo list UI ===== */
+async function updateRepoList() {
+  const release = document.getElementById('inpRelease').value.trim();
+  const arch = document.getElementById('selArch').value;
+  const adaptation = document.getElementById('inpAdaptation').value;
+  if (!release) return;
+
+  const repos = [];
+  for (const item of state.settings.repoTemplates) {
+    if (!item.enabled) continue;
+    const tpl = item.template;
+    const needsAdapt = templateNeedsAdaptation(tpl);
+    const needsSecureDomain = templateUsesSecureDomain(tpl);
+    const disabled = needsAdapt && !adaptation;
+    const url = disabled ? '' : resolveTemplate(tpl);
+    const urlNoarch = disabled ? '' : resolveTemplateNoarch(tpl);
+    const [cached, cachedNoarch] = url ? [await getCachedData(url), urlNoarch !== url ? await getCachedData(urlNoarch) : null] : [null, null];
+    const packages = [];
+    if (cached) packages.push(...filterExcludedPackages(cached.packages).map(p => ({ ...p, repoUrl: url })));
+    if (cachedNoarch) packages.push(...filterExcludedPackages(cachedNoarch.packages).map(p => ({ ...p, repoUrl: urlNoarch })));
+    repos.push({
+      template: tpl,
+      name: templateShortName(tpl),
+      url,
+      urlNoarch: urlNoarch !== url ? urlNoarch : '',
+      disabled,
+      needsSecureDomain,
+      loading: false,
+      error: null,
+      packages,
+      loaded: !!(cached || cachedNoarch),
+      fromCache: !!(cached || cachedNoarch),
+    });
+  }
+  state.repos = repos;
+
+  mergeAllPackages();
+  renderRepoList();
+  await updateCacheStatusBar();
+  if (state.allPackages.length) showAllPackages();
+}
+
+function renderRepoList() {
+  const s = state.settings;
+  const hasCredentials = !!(s.username && s.password);
+  const hasCorsProxies = (getCorsProxies().length > 0);
+  const grid = document.getElementById('repoGrid');
+  grid.innerHTML = state.repos.map((r, i) => {
+    let statusHtml = '';
+    if (r.loading) statusHtml = `<span class="status loading"><span class="spinner"></span> ${t('loading')}</span>`;
+    else if (r.error) statusHtml = `<span class="status error" title="${esc(r.error)}">${t('error')}</span>`;
+    else if (r.loaded) statusHtml = `<span class="status cached">${r.packages.length} ${t('packages')}${r.fromCache ? ' ' + t('fromCache') : ''}</span>`;
+    else if (r.disabled) statusHtml = `<span class="status empty">${t('needAdapt')}</span>`;
+    else if (r.needsSecureDomain && !hasCredentials) statusHtml = `<span class="status empty">${t('noLogin')}</span>`;
+    else if (!hasCorsProxies) statusHtml = `<span class="status empty">${t('noCors')}</span>`;
+    else statusHtml = `<span class="status empty">${t('notLoaded')}</span>`;
+
+    const needsSettingsBtn = (!r.loaded && (r.needsSecureDomain && !hasCredentials)) || (!r.loaded && !hasCorsProxies);
+    const btnLabel = r.loaded ? t('update') : (needsSettingsBtn ? t('settings') : t('load'));
+    const btnOnclick = needsSettingsBtn ? 'showSettings()' : `loadRepo(${i}, ${r.loaded})`;
+    return `<div class="repo-item">
+      <span class="repo-name" title="${esc(r.url || r.template)}">${esc(r.name)}</span>
+      ${statusHtml}
+      <div class="repo-actions">
+        <button onclick="${btnOnclick}" ${r.disabled || r.loading ? 'disabled' : ''}>${btnLabel}</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('repoCount').textContent = `(${state.repos.filter(r => r.loaded).length}/${state.repos.length} ${t('loaded')})`;
+}
+
+/* ===== Load repo metadata ===== */
+async function loadRepo(index, forceRefresh = false) {
+  const repo = state.repos[index];
+  if (repo.disabled || repo.loading) return;
+  const cached = !forceRefresh && await getCachedData(repo.url);
+  const cachedNoarch = repo.urlNoarch && !forceRefresh && await getCachedData(repo.urlNoarch);
+  if (cached || cachedNoarch) {
+    repo.packages = [];
+    if (cached) repo.packages.push(...filterExcludedPackages(cached.packages).map(p => ({ ...p, repoUrl: repo.url })));
+    if (cachedNoarch) repo.packages.push(...filterExcludedPackages(cachedNoarch.packages).map(p => ({ ...p, repoUrl: repo.urlNoarch })));
+    repo.loaded = true;
+    repo.fromCache = true;
+    mergeAllPackages();
+    renderRepoList();
+    await updateCacheStatusBar();
+    showAllPackages();
+    toast(t('repoCached', { name: repo.name, count: repo.packages.length }), 'info');
+    return;
+  }
+  repo.loading = true;
+  repo.error = null;
+  renderRepoList();
+
+  const loadFromUrl = async (url) => {
+    const repomdUrl = url + 'repodata/repomd.xml';
+    const repomdResp = await pFetch(repomdUrl);
+    const repomdText = await repomdResp.text();
+    const { primary: primaryHref, filelists: filelistsHref } = parseRepomd(repomdText);
+    if (!primaryHref) throw new Error('primary.xml not found in repomd.xml');
+    const primaryUrl = url + primaryHref;
+    const primaryResp = primaryUrl.endsWith('.gz') ? await pFetchGzip(primaryUrl) : await pFetch(primaryUrl);
+    const primaryText = await primaryResp.text();
+    let packages = filterExcludedPackages(parsePrimary(primaryText));
+    if (filelistsHref) {
+      try {
+        const filelistsUrl = url + filelistsHref;
+        const filelistsResp = filelistsUrl.endsWith('.gz') ? await pFetchGzip(filelistsUrl) : await pFetch(filelistsUrl);
+        const filelistsText = await filelistsResp.text();
+        const filelistMap = parseFilelists(filelistsText);
+        mergeFilesIntoPackages(packages, filelistMap);
+      } catch (_) { /* filelists optional */ }
+    }
+    return packages;
+  };
+
+  try {
+    const [packagesArch, packagesNoarch] = await Promise.all([
+      loadFromUrl(repo.url),
+      repo.urlNoarch ? loadFromUrl(repo.urlNoarch).catch(() => []) : Promise.resolve([]),
+    ]);
+    repo.packages = [
+      ...packagesArch.map(p => ({ ...p, repoUrl: repo.url })),
+      ...packagesNoarch.map(p => ({ ...p, repoUrl: repo.urlNoarch })),
+    ];
+    repo.loaded = true;
+    repo.fromCache = false;
+    await setCachedData(repo.url, packagesArch);
+    if (repo.urlNoarch && packagesNoarch.length) await setCachedData(repo.urlNoarch, packagesNoarch);
+    mergeAllPackages();
+    showAllPackages();
+    toast(t('repoLoaded', { name: repo.name, count: repo.packages.length }), 'success');
+  } catch (e) {
+    repo.error = e.message === 'AUTH_REQUIRED' ? t('authRequiredShort') : e.message;
+    if (e.message !== 'AUTH_REQUIRED') toast(`${repo.name}: ${repo.error}`, 'error');
+  } finally {
+    repo.loading = false;
+    mergeAllPackages();
+    renderRepoList();
+    await updateCacheStatusBar();
+  }
+}
+
+async function loadAllRepos() {
+  if (!getCorsProxies().length) {
+    toast(t('addCorsProxyHint'), 'warn');
+    return;
+  }
+  const indices = state.repos.map((r, i) => (!r.disabled && !r.loading) ? i : -1).filter(i => i >= 0);
+  for (const i of indices) {
+    await loadRepo(i, false);
+  }
+  showAllPackages();
+}
+
+async function refreshAllRepos() {
+  if (!getCorsProxies().length) {
+    toast(t('addCorsProxyHint'), 'warn');
+    return;
+  }
+  const s = state.settings;
+  const hasCredentials = !!(s.username && s.password);
+  const indices = state.repos.map((r, i) => {
+    if (r.disabled || r.loading) return -1;
+    if (r.needsSecureDomain && !hasCredentials) return -1;
+    return i;
+  }).filter(i => i >= 0);
+  await clearAllCache();
+  for (const i of indices) {
+    await loadRepo(i, true);
+  }
+  showAllPackages();
+  buildSystemPreinstalledSet();
+}
+
+function showAllPackages() {
+  state.searchResults = [...state.allPackages];
+  document.getElementById('searchInput').value = '';
+  renderResults();
+}
+
+/* ===== XML Parsing ===== */
+function parseRepomd(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const dataEls = doc.getElementsByTagNameNS('*', 'data');
+  let primary = null, filelists = null;
+  for (const d of dataEls) {
+    const t = d.getAttribute('type');
+    const loc = d.getElementsByTagNameNS('*', 'location')[0];
+    const href = loc?.getAttribute('href') || '';
+    if (t === 'primary') primary = href;
+    else if (t === 'filelists') filelists = href;
+  }
+  return { primary, filelists };
+}
+
+function parseFilelists(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const pkgEls = doc.getElementsByTagNameNS('*', 'package');
+  const map = new Map();
+  for (const pkg of pkgEls) {
+    const name = pkg.getAttribute('name') || '';
+    const arch = pkg.getAttribute('arch') || '';
+    const verEl = pkg.getElementsByTagNameNS('*', 'version')[0];
+    const ver = verEl?.getAttribute('ver') || '';
+    const rel = verEl?.getAttribute('rel') || '';
+    const key = `${name}|${arch}|${ver}|${rel}`;
+    const files = [];
+    for (const f of pkg.getElementsByTagNameNS('*', 'file')) {
+      const path = (f.getAttribute('name') || f.textContent || f.getElementsByTagNameNS('*', 'name')[0]?.textContent || '').trim();
+      if (path) files.push(path);
+    }
+    if (files.length) map.set(key, files);
+  }
+  return map;
+}
+
+function mergeFilesIntoPackages(packages, filelistMap) {
+  for (const p of packages) {
+    const key = `${p.name}|${p.arch}|${p.ver}|${p.rel}`;
+    p.files = filelistMap.get(key) || [];
+  }
+}
+
+function parsePrimary(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const pkgEls = doc.getElementsByTagNameNS('*', 'package');
+  const packages = [];
+  for (const pkg of pkgEls) {
+    if (pkg.getAttribute('type') !== 'rpm') continue;
+    const getText = tag => { const el = pkg.getElementsByTagNameNS('*', tag)[0]; return el?.textContent || ''; };
+    const getAttr = (tag, attr) => { const el = pkg.getElementsByTagNameNS('*', tag)[0]; return el?.getAttribute(attr) || ''; };
+
+    const requires = [];
+    const provides = [];
+
+    const formatEls = pkg.getElementsByTagNameNS('*', 'format');
+    if (formatEls.length) {
+      const fmt = formatEls[0];
+      const reqEl = fmt.getElementsByTagNameNS('http://linux.duke.edu/metadata/rpm', 'requires')[0];
+      if (reqEl) {
+        for (const e of reqEl.getElementsByTagNameNS('http://linux.duke.edu/metadata/rpm', 'entry')) {
+          requires.push({
+            name: e.getAttribute('name') || '',
+            flags: e.getAttribute('flags') || '',
+            ver: e.getAttribute('ver') || '',
+          });
+        }
+      }
+      const provEl = fmt.getElementsByTagNameNS('http://linux.duke.edu/metadata/rpm', 'provides')[0];
+      if (provEl) {
+        for (const e of provEl.getElementsByTagNameNS('http://linux.duke.edu/metadata/rpm', 'entry')) {
+          provides.push(e.getAttribute('name') || '');
+        }
+      }
+    }
+
+    const xml = new XMLSerializer().serializeToString(pkg);
+    packages.push({
+      name: getText('name'),
+      arch: getText('arch'),
+      ver: getAttr('version', 'ver'),
+      rel: getAttr('version', 'rel'),
+      epoch: getAttr('version', 'epoch') || '0',
+      summary: getText('summary'),
+      description: getText('description'),
+      location: getAttr('location', 'href'),
+      size: parseInt(getAttr('size', 'package')) || 0,
+      requires,
+      provides,
+      xml,
+    });
+  }
+  return packages;
+}
+
+/* ===== Cache (IndexedDB — без ограничения размера) ===== */
+const IDB_NAME = 'rpm-cache-db';
+const IDB_STORE = 'packages';
+
+function cacheKey(url) { return 'rpm:' + url; }
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => resolve(r.result);
+    r.onupgradeneeded = (e) => {
+      if (!e.target.result.objectStoreNames.contains(IDB_STORE)) {
+        e.target.result.createObjectStore(IDB_STORE);
+      }
+    };
+  });
+}
+
+async function getCachedData(url) {
+  const key = cacheKey(url);
+  try {
+    const db = await openIDB();
+    const data = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (data) return data;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    await setCachedData(url, parsed.packages);
+    localStorage.removeItem(key);
+    return parsed;
+  } catch { return null; }
+}
+
+async function setCachedData(url, packages) {
+  const key = cacheKey(url);
+  const data = { ts: Date.now(), packages };
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).put(data, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+  } catch (e) {
+    toast(t('cacheWriteErr') + (e.message || t('unknown')), 'warn');
+  }
+}
+
+function confirmClearCache() {
+  document.getElementById('confirmText').textContent = t('clearCacheConfirm');
+  _confirmAction = () => { clearAllCache(); };
+  document.getElementById('confirmOverlay').classList.add('active');
+}
+
+async function clearAllCache() {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (_) {}
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k.startsWith('rpm:')) keys.push(k);
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+  state.repos.forEach(r => { if (!r.loading) { r.packages = []; r.loaded = false; r.cached = false; } });
+  mergeAllPackages();
+  state.searchResults = [];
+  document.getElementById('searchInput').value = '';
+  renderResults();
+  renderRepoList();
+  await updateCacheStatusBar();
+  toast(t('cacheCleared'), 'info');
+}
+
+async function getCacheSizeBytes() {
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k.startsWith('rpm:')) total += (localStorage.getItem(k) || '').length * 2;
+  }
+  try {
+    const db = await openIDB();
+    const vals = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    for (const val of vals) {
+      if (val) total += new Blob([JSON.stringify(val)]).size;
+    }
+    db.close();
+  } catch (_) {}
+  return total;
+}
+
+function updateCacheSize() {
+  getCacheSizeBytes().then(bytes => {
+    document.getElementById('cacheSize').textContent = formatBytes(bytes);
+  });
+}
+
+async function updateCacheStatusBar() {
+  const bytes = await getCacheSizeBytes();
+  document.getElementById('cacheStatus').textContent = bytes > 0 ? `${t('cache')} ${formatBytes(bytes)}` : '';
+  document.getElementById('cacheSize').textContent = formatBytes(bytes);
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+/* ===== Merge & search ===== */
+function mergeAllPackages() {
+  state.allPackages = [];
+  for (const repo of state.repos) {
+    if (!repo.loaded) continue;
+    for (const pkg of repo.packages) {
+      state.allPackages.push({ ...pkg, repoUrl: pkg.repoUrl || repo.url, repoName: repo.name });
+    }
+  }
+  buildSystemPreinstalledSet();
+}
+
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const type = document.getElementById('searchType')?.value || 'name';
+  if (!q) {
+    state.searchResults = [...state.allPackages];
+  } else {
+    state.searchResults = state.allPackages.filter(p => {
+      if (type === 'name') return (p.name || '').toLowerCase().includes(q);
+      if (type === 'file') return (p.files || []).some(f => (f || '').toLowerCase().includes(q));
+      if (type === 'requires') return (p.requires || []).some(r => (r.name || '').toLowerCase().includes(q));
+      if (type === 'provides') return (p.provides || []).some(pr => (pr || '').toLowerCase().includes(q));
+      return (p.name || '').toLowerCase().includes(q);
+    });
+    state.searchResults.sort((a, b) => {
+      const aExact = a.name.toLowerCase() === q ? 0 : 1;
+      const bExact = b.name.toLowerCase() === q ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      return a.name.localeCompare(b.name);
+    });
+  }
+  renderResults();
+}
+
+/* ===== Render results ===== */
+function renderResults() {
+  const list = document.getElementById('resultsList');
+  const header = document.getElementById('resultsHeader');
+  const empty = document.getElementById('emptyState');
+  const results = state.searchResults;
+
+  if (!state.allPackages.length) {
+    header.style.display = 'none';
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  header.style.display = '';
+  document.getElementById('resultsCount').textContent = `${results.length} ${t('found')}`;
+
+  if (!results.length) {
+    list.innerHTML = '<div class="empty-state"><p>' + t('nothingFound') + '</p></div>';
+    return;
+  }
+
+  list.innerHTML = results.slice(0, 200).map((p, i) => {
+    const downloadUrl = p.repoUrl + p.location;
+    const authPart = needsAuth(downloadUrl) && state.settings.username
+      ? `${state.settings.username}:${state.settings.password}@`
+      : '';
+    const directUrl = downloadUrl.replace('://', '://' + authPart);
+
+    return `<div class="pkg-card" onclick="showPkgCard(state.searchResults[${i}])">
+      <div class="pkg-title">${esc(p.name)}</div>
+      <div class="pkg-meta">${esc(p.ver)}-${esc(p.rel)} &middot; ${esc(p.arch)} &middot; ${formatBytes(p.size)}</div>
+      ${p.summary ? `<div class="pkg-summary">${esc(p.summary)}</div>` : ''}
+      <div class="pkg-repo">${esc(p.repoName)}</div>
+      <div class="pkg-actions" onclick="event.stopPropagation()">
+        <a href="${esc(directUrl)}" target="_blank"><button>${t('download')}</button></a>
+        <button onclick="showDeps(${i})">${t('deps')}</button>
+        <button onclick="showDeps(state.searchResults[${i}], true)">${t('depsRepo')}</button>
+        <button onclick="showSystemDeps(state.searchResults[${i}])">${t('depsSystem')}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (results.length > 200) {
+    list.innerHTML += `<div class="empty-state"><p>${t('shown200', { total: results.length })}</p></div>`;
+  }
+}
+
+/* ===== Package card ===== */
+let currentPkgCard = null;
+let pkgCardHistory = [];
+
+function showPkgCard(pkg, fromDep = false) {
+  if (!pkg) return;
+  if (fromDep && currentPkgCard) pkgCardHistory.push(currentPkgCard);
+  currentPkgCard = pkg;
+  const downloadUrl = pkg.repoUrl + pkg.location;
+  const authPart = needsAuth(downloadUrl) && state.settings.username
+    ? `${state.settings.username}:${state.settings.password}@`
+    : '';
+  const directUrl = downloadUrl.replace('://', '://' + authPart);
+
+  document.getElementById('pkgCardTitle').textContent = pkg.name;
+  document.getElementById('pkgCardDownload').href = directUrl;
+
+  const verFull = (pkg.epoch && pkg.epoch !== '0') ? `${pkg.epoch}:${pkg.ver}-${pkg.rel}` : `${pkg.ver}-${pkg.rel}`;
+  const allReq = [...(pkg.requires || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  const body = document.getElementById('pkgCardBody');
+  body.innerHTML = `
+    <div class="pkg-card-detail">
+      <div class="info-row"><span class="info-label">${t('version')}</span><span class="info-value">${esc(verFull)}</span></div>
+      <div class="info-row"><span class="info-label">${t('arch')}</span><span class="info-value">${esc(pkg.arch)}</span></div>
+      <div class="info-row"><span class="info-label">${t('size')}</span><span class="info-value">${formatBytes(pkg.size)}</span></div>
+      <div class="info-row"><span class="info-label">${t('repo')}</span><span class="info-value">${esc(pkg.repoName)}</span></div>
+      <div class="info-row"><span class="info-label">${t('path')}</span><span class="info-value">${esc(pkg.location)}</span></div>
+      ${pkg.summary ? `<div class="info-row"><span class="info-label">${t('summary')}</span><span>${esc(pkg.summary)}</span></div>` : ''}
+      ${pkg.description ? `<div class="section"><div class="section-title">${t('description')}</div><div class="description">${esc(pkg.description)}</div></div>` : ''}
+      ${pkg.provides?.length ? `<div class="section"><div class="section-title">${t('provides')}</div><div class="provides-list">${pkg.provides.map(pr => `<span>${esc(pr)}</span>`).join('')}</div></div>` : ''}
+      ${allReq.length ? `<div class="section"><div class="section-title">${t('requires')}</div><div class="requires-list" id="pkgCardRequires"></div></div>` : ''}
+      ${(pkg.files || []).length ? `<div class="section"><div class="section-title">${t('files')} (${pkg.files.length})</div><div class="files-list">${pkg.files.map(f => esc(f)).join('\n')}</div></div>` : `<div class="section"><div class="section-title">${t('files')}</div><p class="files-unavail">${t('filesUnavail')}</p></div>`}
+    </div>`;
+
+  document.getElementById('pkgCardBack').style.display = pkgCardHistory.length ? '' : 'none';
+  const hasDeps = (pkg.requires || []).length > 0;
+  document.getElementById('pkgCardDepsDownload').style.display = hasDeps ? '' : 'none';
+  document.getElementById('pkgCardDepsRepo').style.display = getDepsInSameRepo(pkg).length ? '' : 'none';
+  document.getElementById('pkgCardDepsSystem').style.display = hasDeps ? '' : 'none';
+
+  if (allReq.length) {
+    const allProvides = new Set();
+    for (const p of state.allPackages) {
+      allProvides.add(p.name);
+      for (const pr of p.provides) allProvides.add(pr);
+    }
+    const reqsEl = document.getElementById('pkgCardRequires');
+    if (reqsEl) {
+      allReq.forEach(d => {
+        const found = allProvides.has(d.name);
+        const verStr = d.ver ? ` ${d.flags} ${d.ver}` : '';
+        const span = document.createElement('span');
+        span.className = 'dep-name' + (found ? ' clickable' : '');
+        span.textContent = d.name + verStr;
+        if (found) {
+          span.onclick = () => {
+            const match = findPackageByDep(d.name);
+            if (match) showPkgCard(match, true);
+          };
+        }
+        reqsEl.appendChild(span);
+      });
+    }
+  }
+
+  document.getElementById('pkgCardOverlay').classList.add('active');
+}
+
+function closePkgCard() {
+  currentPkgCard = null;
+  pkgCardHistory = [];
+  document.getElementById('pkgCardOverlay').classList.remove('active');
+  closePkgXml();
+}
+
+function openDepsFromCard(filterBySameRepo = false) {
+  const pkg = currentPkgCard;
+  if (!pkg) return;
+  closePkgCard();
+  showDeps(pkg, filterBySameRepo);
+}
+
+function pkgCardBack() {
+  if (!pkgCardHistory.length) return;
+  const prev = pkgCardHistory.pop();
+  showPkgCard(prev, false);
+}
+
+function showPkgXml() {
+  if (!currentPkgCard) return;
+  document.getElementById('pkgXmlTitle').textContent = `XML: ${currentPkgCard.name}`;
+  const content = document.getElementById('pkgXmlContent');
+  if (currentPkgCard.xml) {
+    content.textContent = formatXml(currentPkgCard.xml);
+  } else {
+    content.textContent = t('xmlUnavail');
+  }
+  document.getElementById('pkgXmlOverlay').classList.add('active');
+}
+
+function closePkgXml() {
+  document.getElementById('pkgXmlOverlay').classList.remove('active');
+}
+
+function formatXml(xml) {
+  return xml.replace(/>\s*</g, '>\n<').trim();
+}
+
+function copyPkgXml() {
+  if (!currentPkgCard?.xml) return;
+  navigator.clipboard.writeText(currentPkgCard.xml).then(() => toast(t('copied'), 'success')).catch(() => toast(t('copyFailed'), 'error'));
+}
+
+function findPackageByDep(depName) {
+  for (const p of state.allPackages) {
+    if (p.name === depName) return p;
+    if (p.provides && p.provides.includes(depName)) return p;
+  }
+  const base = depName.replace(/[.(].*$/, '');
+  if (base !== depName) {
+    for (const p of state.allPackages) {
+      if (p.name === base) return p;
+    }
+  }
+  return null;
+}
+
+function findPackageByDepInRepo(depName, repoName) {
+  for (const p of state.allPackages) {
+    if (p.repoName !== repoName) continue;
+    if (p.name === depName) return p;
+    if (p.provides && p.provides.includes(depName)) return p;
+  }
+  const base = depName.replace(/[.(].*$/, '');
+  if (base !== depName) {
+    for (const p of state.allPackages) {
+      if (p.repoName !== repoName) continue;
+      if (p.name === base) return p;
+    }
+  }
+  return null;
+}
+
+function getDepsInSameRepo(pkg) {
+  const allReq = pkg.requires || [];
+  const seen = new Set();
+  const result = [];
+  for (const d of allReq) {
+    const match = findPackageByDepInRepo(d.name, pkg.repoName);
+    if (match && !seen.has(match.name)) {
+      seen.add(match.name);
+      result.push(match);
+    }
+  }
+  return result;
+}
+
+/* ===== System dependency tree ===== */
+function getSystemBaseDeps() {
+  const raw = (state.settings.systemBaseDeps ?? DEFAULT_SYSTEM_BASE_DEPS).trim();
+  const adaptation = document.getElementById('inpAdaptation')?.value?.trim() || '';
+  return raw.split(/\r?\n/).map(line => line.trim().replace(/\$adaptation/g, adaptation)).filter(Boolean);
+}
+
+function buildSystemPreinstalledSet() {
+  state.systemPreinstalled.clear();
+  const baseNames = getSystemBaseDeps();
+  const queue = [...baseNames];
+  const seen = new Set();
+  while (queue.length) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    const pkg = findPackageByDep(name);
+    if (!pkg) continue;
+    seen.add(pkg.name);
+    state.systemPreinstalled.add(pkg.name);
+    for (const prov of pkg.provides || []) state.systemPreinstalled.add(prov);
+    const nonStd = (pkg.requires || []).filter(r => !SYSTEM_DEP_PATTERNS.some(pat => pat.test(r.name)));
+    for (const d of nonStd) {
+      const match = findPackageByDep(d.name);
+      if (match && !seen.has(match.name)) queue.push(match.name);
+    }
+  }
+  state.systemPreinstalledCount = seen.size;
+}
+
+function refreshSystemDeps() {
+  buildSystemPreinstalledSet();
+  toast(t('systemRefreshed', { count: state.systemPreinstalledCount ?? 0 }), 'success');
+}
+
+function getSystemTreePackages() {
+  return state.allPackages.filter(p => state.systemPreinstalled.has(p.name));
+}
+
+function showSystemTree() {
+  const packages = getSystemTreePackages().sort((a, b) => a.name.localeCompare(b.name));
+  document.getElementById('systemTreeTitle').textContent = t('systemTreeTitle', { count: packages.length });
+  const content = document.getElementById('systemTreeContent');
+  if (!packages.length) {
+    content.innerHTML = '<p style="color:var(--text-muted)">' + t('systemTreeEmpty') + '</p>';
+  } else {
+    content.innerHTML = `<p style="margin-bottom:10px;color:var(--text-muted);font-size:.85rem">${packages.length} ${t('packages')}:</p>
+    <ul class="deps-list" id="systemTreeListContainer">${packages.map((p, i) => {
+      const url = p.repoUrl + p.location;
+      const authPart = needsAuth(url) && state.settings.username ? `${state.settings.username}:${state.settings.password}@` : '';
+      const directUrl = url.replace('://', '://' + authPart);
+      return `<li><span class="dep-name clickable" data-pkg-idx="${i}">${esc(p.name)} ${esc(p.ver)}-${esc(p.rel)}</span><span class="dep-right"><span class="dep-repo">${esc(p.repoName || '')}</span><a href="${esc(directUrl)}" target="_blank"><button class="dep-dl-btn">${t('download')}</button></a></span></li>`;
+    }).join('')}</ul>`;
+    const list = content.querySelector('#systemTreeListContainer');
+    state._systemTreePackages = packages;
+    list?.addEventListener('click', (e) => {
+      if (e.target.closest('a, button')) return;
+      const span = e.target.closest('.dep-name.clickable');
+      if (!span) return;
+      const idx = parseInt(span.dataset?.pkgIdx, 10);
+      if (!isNaN(idx) && state._systemTreePackages?.[idx]) {
+        closeSystemTree();
+        showPkgCard(state._systemTreePackages[idx], false);
+      }
+    });
+  }
+  document.getElementById('systemTreeOverlay').classList.add('active');
+}
+
+function closeSystemTree() {
+  document.getElementById('systemTreeOverlay').classList.remove('active');
+  state._systemTreePackages = null;
+}
+
+function downloadSystemTreeList() {
+  const packages = getSystemTreePackages().sort((a, b) => a.name.localeCompare(b.name));
+  const text = `# System tree packages\n# Base: ${getSystemBaseDeps().join(', ')}\n\n` + packages.map(p => `${p.name} ${p.ver}-${p.rel} ${p.arch}`).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'system-tree.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function isPreinstalled(depName) {
+  if (state.systemPreinstalled.has(depName)) return true;
+  const base = depName.replace(/[.(].*$/, '');
+  return base !== depName && state.systemPreinstalled.has(base);
+}
+
+function getSystemDepsRecursive(pkg) {
+  const result = [];
+  const visited = new Set();
+  const queue = [{ pkg, depth: 0 }];
+  while (queue.length) {
+    const { pkg: curr, depth } = queue.shift();
+    if (visited.has(curr.name)) continue;
+    visited.add(curr.name);
+    const nonStd = (curr.requires || []).filter(r => !SYSTEM_DEP_PATTERNS.some(pat => pat.test(r.name)));
+    for (const d of nonStd) {
+      if (isPreinstalled(d.name)) continue;
+      const match = findPackageByDep(d.name);
+      result.push({ dep: d, match, depth });
+      if (match && !visited.has(match.name)) queue.push({ pkg: match, depth: depth + 1 });
+    }
+  }
+  return result;
+}
+
+function showSystemDeps(resultIndexOrPkg) {
+  const pkg = typeof resultIndexOrPkg === 'number' ? state.searchResults[resultIndexOrPkg] : resultIndexOrPkg;
+  if (!pkg) return;
+  state.currentDepsPkg = pkg;
+  const items = getSystemDepsRecursive(pkg);
+  const uniqueByPkg = new Map();
+  for (const { dep, match, depth } of items) {
+    const key = match ? match.name : dep.name;
+    if (!uniqueByPkg.has(key) || uniqueByPkg.get(key).depth > depth) {
+      uniqueByPkg.set(key, { dep, match, depth });
+    }
+  }
+  const sorted = [...uniqueByPkg.values()].sort((a, b) => a.depth - b.depth || (a.dep.name || '').localeCompare(b.dep.name || ''));
+  document.getElementById('systemDepsTitle').textContent = t('depsSystemTitle', { name: pkg.name });
+  const content = document.getElementById('systemDepsContent');
+  if (!sorted.length) {
+    content.innerHTML = '<p style="color:var(--text-muted)">' + t('noSystemDeps') + '</p>';
+  } else {
+    content.innerHTML = `<p style="margin-bottom:10px;color:var(--text-muted);font-size:.85rem">${sorted.length} ${t('depsSystemCount')}:</p>
+    <ul class="deps-list" id="systemDepsListContainer">${sorted.map(({ dep, match, depth }) => {
+      const verStr = dep.ver ? ` ${dep.flags} ${dep.ver}` : '';
+      const indent = '&nbsp;'.repeat(depth * 4);
+      let rightPart = '';
+      if (match) {
+        const url = match.repoUrl + match.location;
+        const authPart = needsAuth(url) && state.settings.username ? `${state.settings.username}:${state.settings.password}@` : '';
+        const directUrl = url.replace('://', '://' + authPart);
+        rightPart = `<span class="dep-repo">${esc(match.repoName || '')}</span><a href="${esc(directUrl)}" target="_blank"><button class="dep-dl-btn">${t('download')}</button></a>`;
+      } else {
+        rightPart = '<span class="dep-avail missing">' + t('notFound') + '</span>';
+      }
+      const dataAttr = match ? ` data-dep-name="${encodeURIComponent(dep.name)}"` : '';
+      const clickable = match ? ' clickable' : '';
+      return `<li><span class="dep-name${clickable}"${dataAttr}>${indent}${esc(dep.name)}${esc(verStr)}</span><span class="dep-right">${rightPart}</span></li>`;
+    }).join('')}</ul>`;
+    content.querySelector('#systemDepsListContainer')?.addEventListener('click', (e) => {
+      const span = e.target.closest('.dep-name.clickable');
+      if (span?.dataset.depName) {
+        const match = findPackageByDep(decodeURIComponent(span.dataset.depName));
+        if (match) { closeSystemDeps(); showPkgCard(match, true); }
+      }
+    });
+  }
+  document.getElementById('systemDepsOverlay').classList.add('active');
+}
+
+function closeSystemDeps() {
+  document.getElementById('systemDepsOverlay').classList.remove('active');
+}
+
+function openSystemDepsFromCard() {
+  const pkg = currentPkgCard;
+  if (!pkg) return;
+  closePkgCard();
+  showSystemDeps(pkg);
+}
+
+function downloadSystemDepsList() {
+  const pkg = state.currentDepsPkg;
+  if (!pkg) return;
+  const items = getSystemDepsRecursive(pkg);
+  const uniqueByPkg = new Map();
+  for (const { dep, match } of items) {
+    const key = match ? match.name : dep.name;
+    if (!uniqueByPkg.has(key)) uniqueByPkg.set(key, dep);
+  }
+  const text = `# System dependencies for ${pkg.name} ${pkg.ver}-${pkg.rel}\n# Not pre-installed:\n\n` +
+    [...uniqueByPkg.values()].map(d => d.name + (d.ver ? ` ${d.flags} ${d.ver}` : '')).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${pkg.name}-system-deps.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadDepsFromSameRepo(pkgArg) {
+  const pkg = pkgArg || currentPkgCard;
+  if (!pkg) return;
+  const deps = getDepsInSameRepo(pkg);
+  if (!deps.length) {
+    toast(t('noDepsRepo'), 'info');
+    return;
+  }
+  const authPart = needsAuth(pkg.repoUrl) && state.settings.username
+    ? `${state.settings.username}:${state.settings.password}@`
+    : '';
+  const urls = deps.map(d => (d.repoUrl || pkg.repoUrl).replace('://', '://' + authPart) + d.location);
+  const text = urls.join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${pkg.name}-deps-urls.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(t('wgetHint', { count: deps.length }), 'success');
+}
+
+/* ===== Dependencies ===== */
+let downloadedDepsKeys = new Set();
+
+function markDepDownloaded(el) {
+  const key = el.dataset.dlIdx;
+  if (key != null) downloadedDepsKeys.add(key);
+  const btn = el.querySelector('button');
+  if (btn) { btn.textContent = t('downloaded'); btn.classList.add('downloaded'); }
+}
+
+function showDeps(resultIndexOrPkg, filterBySameRepo = false) {
+  downloadedDepsKeys.clear();
+  const pkg = typeof resultIndexOrPkg === 'number' ? state.searchResults[resultIndexOrPkg] : resultIndexOrPkg;
+  if (!pkg) return;
+  state.currentDepsPkg = pkg;
+
+  let nonStd = (pkg.requires || []).filter(r => !SYSTEM_DEP_PATTERNS.some(pat => pat.test(r.name)));
+  if (filterBySameRepo) {
+    nonStd = nonStd.filter(d => findPackageByDepInRepo(d.name, pkg.repoName));
+  }
+
+  const allProvides = new Set();
+  for (const p of state.allPackages) {
+    allProvides.add(p.name);
+    for (const prov of p.provides) allProvides.add(prov);
+  }
+
+  const findMatch = (depName) => filterBySameRepo ? findPackageByDepInRepo(depName, pkg.repoName) : findPackageByDep(depName);
+
+  document.getElementById('depsTitle').textContent = filterBySameRepo ? t('depsRepoTitle', { name: pkg.name }) : t('depsTitle', { name: pkg.name });
+  const content = document.getElementById('depsContent');
+
+  if (!nonStd.length) {
+    content.innerHTML = '<p style="color:var(--text-muted)">' + (filterBySameRepo ? t('noDepsRepo') : t('noNonStdDeps')) + '</p>';
+  } else {
+    content.innerHTML = `<p style="margin-bottom:10px;color:var(--text-muted);font-size:.85rem">${nonStd.length} ${t('depsCount')}:</p>
+    <ul class="deps-list" id="depsListContainer">${nonStd.map((d, idx) => {
+      const match = findMatch(d.name);
+      const found = !!match;
+      const verStr = d.ver ? ` ${d.flags} ${d.ver}` : '';
+      const dataAttr = found ? ` data-dep-name="${encodeURIComponent(d.name)}"` : '';
+      let rightPart = '';
+      if (found) {
+        const url = match.repoUrl + match.location;
+        const authPart = needsAuth(url) && state.settings.username ? `${state.settings.username}:${state.settings.password}@` : '';
+        const directUrl = url.replace('://', '://' + authPart);
+        const repoHtml = `<span class="dep-repo" title="${esc(match.repoName || '')}">${esc(match.repoName || '')}</span>`;
+        rightPart = `${repoHtml}<a href="${esc(directUrl)}" target="_blank" class="dep-dl-link" data-dl-idx="${idx}"><button class="dep-dl-btn">${t('download')}</button></a>`;
+      } else {
+        rightPart = '<span class="dep-avail missing">' + t('notFound') + '</span>';
+      }
+      return `<li>
+        <span class="dep-name ${found ? 'clickable' : ''}"${dataAttr}>${esc(d.name)}${esc(verStr)}</span>
+        <span class="dep-right">${rightPart}</span>
+      </li>`;
+    }).join('')}</ul>`;
+    content.querySelector('#depsListContainer').addEventListener('click', (e) => {
+      const dlLink = e.target.closest('a.dep-dl-link');
+      if (dlLink) { markDepDownloaded(dlLink); return; }
+      const span = e.target.closest('.dep-name.clickable');
+      if (span && span.dataset.depName) {
+        const match = findMatch(decodeURIComponent(span.dataset.depName));
+        if (match) { closeDeps(); showPkgCard(match, true); }
+      }
+    });
+  }
+
+  document.getElementById('depsOverlay').classList.add('active');
+}
+
+function closeDeps() {
+  document.getElementById('depsOverlay').classList.remove('active');
+}
+
+function downloadDepsList() {
+  const pkg = state.currentDepsPkg;
+  if (!pkg) return;
+  const nonStd = (pkg.requires || []).filter(r => !SYSTEM_DEP_PATTERNS.some(pat => pat.test(r.name)));
+  const text = `# Dependencies for ${pkg.name} ${pkg.ver}-${pkg.rel}\n# Non-standard requires:\n\n` +
+    nonStd.map(d => d.name + (d.ver ? ` ${d.flags} ${d.ver}` : '')).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${pkg.name}-deps.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ===== Settings modal ===== */
+function addRepoTemplateRow(item) {
+  const tbody = document.getElementById('cfgRepoTemplatesList');
+  const row = document.createElement('tr');
+  row.className = 'template-row' + (item && !item.enabled ? ' template-disabled' : '');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = !item || item.enabled !== false;
+  cb.title = t('enableRepo');
+  cb.onchange = () => { row.classList.toggle('template-disabled', !cb.checked); };
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = '$releaseDomain/releases/$release/.../$arch/';
+  inp.value = (item && item.template) || (typeof item === 'string' ? item : '');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = t('remove');
+  btn.onclick = () => row.remove();
+  row.appendChild(document.createElement('td')).appendChild(cb);
+  row.appendChild(document.createElement('td')).appendChild(inp);
+  row.appendChild(document.createElement('td')).appendChild(btn);
+  tbody.appendChild(row);
+}
+
+function addCorsProxyRow(item) {
+  const tbody = document.getElementById('cfgCorsProxiesList');
+  const row = document.createElement('tr');
+  row.className = 'template-row proxy-row';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = 'https://example.com/?url=$url';
+  inp.value = (item && item.template) || (typeof item === 'string' ? item : '');
+  const sel = document.createElement('select');
+  ['header', 'query', 'corsfix', 'corsHeaders'].forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = t('corsAuth' + v.charAt(0).toUpperCase() + v.slice(1));
+    sel.appendChild(opt);
+  });
+  const at = item && item.authType;
+  sel.value = (at === 'query' || at === 'corsfix' || at === 'corsHeaders') ? at : 'header';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = t('remove');
+  btn.onclick = () => row.remove();
+  row.appendChild(document.createElement('td')).appendChild(inp);
+  row.appendChild(document.createElement('td')).appendChild(sel);
+  row.appendChild(document.createElement('td')).appendChild(btn);
+  tbody.appendChild(row);
+}
+
+function updateTemplateHelpContent() {
+  const releaseDomain = document.getElementById('cfgReleaseDomain').value || t('empty');
+  const secureDomain = document.getElementById('cfgSecureDomain').value || t('empty');
+  const release = document.getElementById('inpRelease').value.trim() || t('notSelected');
+  const arch = document.getElementById('selArch').value;
+  const adaptation = document.getElementById('inpAdaptation').value.trim() || t('notSelected');
+  const el = document.getElementById('templateHelpContent');
+  if (el) el.innerHTML = `<code>$releaseDomain</code> = ${esc(releaseDomain)}<br>
+<code>$secureDomain</code> = ${esc(secureDomain)}<br>
+<code>$release</code> = ${esc(release)}<br>
+<code>$arch</code> = ${esc(arch)}<br>
+<code>$adaptation</code> = ${esc(adaptation)}`;
+}
+
+function showSettings() {
+  const s = state.settings;
+  document.getElementById('cfgReleaseDomain').value = s.releaseDomain;
+  document.getElementById('cfgSecureDomain').value = s.secureDomain;
+  document.getElementById('cfgUsername').value = s.username;
+  document.getElementById('cfgPassword').value = s.password;
+  document.getElementById('cfgSystemBaseDeps').value = s.systemBaseDeps ?? DEFAULT_SYSTEM_BASE_DEPS;
+  const list = document.getElementById('cfgRepoTemplatesList');
+  list.innerHTML = '';
+  normalizeRepoTemplates(s.repoTemplates).forEach(item => addRepoTemplateRow(item));
+  const proxyList = document.getElementById('cfgCorsProxiesList');
+  proxyList.innerHTML = '';
+  (s.corsProxies || []).forEach(item => addCorsProxyRow(item));
+  if (!proxyList.querySelector('tr')) addCorsProxyRow();
+  updateTemplateHelpContent();
+  ['cfgReleaseDomain', 'cfgSecureDomain'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateTemplateHelpContent);
+  });
+  updateCacheSize();
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+
+function closeSettings() {
+  ['cfgReleaseDomain', 'cfgSecureDomain'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.removeEventListener('input', updateTemplateHelpContent);
+  });
+  document.getElementById('settingsOverlay').classList.remove('active');
+}
+
+function saveSettings() {
+  const s = state.settings;
+  s.releaseDomain = document.getElementById('cfgReleaseDomain').value.replace(/\/+$/, '');
+  s.secureDomain = document.getElementById('cfgSecureDomain').value.replace(/\/+$/, '');
+  s.username = document.getElementById('cfgUsername').value;
+  s.password = document.getElementById('cfgPassword').value;
+  s.repoTemplates = Array.from(document.querySelectorAll('#cfgRepoTemplatesList .template-row')).map(row => {
+    const inp = row.querySelector('td:nth-child(2) input');
+    const cb = row.querySelector('input[type="checkbox"]');
+    const t = inp?.value.trim();
+    return t ? { template: t, enabled: cb?.checked !== false } : null;
+  }).filter(Boolean);
+  s.corsProxies = Array.from(document.querySelectorAll('#cfgCorsProxiesList .proxy-row')).map(row => {
+    const inp = row.querySelector('td:nth-child(1) input');
+    const sel = row.querySelector('td:nth-child(2) select');
+    const t = inp?.value.trim();
+    if (!t) return null;
+    const at = sel?.value;
+    return {
+      template: t,
+      authType: (at === 'query' || at === 'corsfix' || at === 'corsHeaders') ? at : 'header',
+    };
+  }).filter(Boolean);
+  s.systemBaseDeps = (document.getElementById('cfgSystemBaseDeps')?.value ?? '').trim() || DEFAULT_SYSTEM_BASE_DEPS;
+  if (!s.corsProxies.length) s.corsProxies = DEFAULT_CORS_PROXIES.map(p => ({ ...p }));
+  persistSettings();
+  closeSettings();
+  updateRepoList();
+  toast(t('settingsSaved'), 'success');
+  if (s.username) document.getElementById('authBanner').style.display = 'none';
+}
+
+/* ===== Helpers ===== */
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ===== URL params ===== */
+function applyUrlParams() {
+  const params = new URLSearchParams(location.search);
+  const release = params.get('release');
+  const arch = params.get('arch');
+  const adaptation = params.get('adaptation');
+  const query = params.get('query');
+  if (release) document.getElementById('inpRelease').value = release.trim().toLowerCase() === 'latest' ? 'latest' : release;
+  if (arch) {
+    const sel = document.getElementById('selArch');
+    if ([...sel.options].some(o => o.value === arch)) sel.value = arch;
+  }
+  if (adaptation) document.getElementById('inpAdaptation').value = adaptation;
+  if (query) document.getElementById('searchInput').value = query;
+  return { release, arch, adaptation, query };
+}
+
+/* ===== Last config persistence ===== */
+const CONFIG_KEYS = { release: 'rpm_last_release', arch: 'rpm_last_arch', adaptation: 'rpm_last_adaptation' };
+
+function saveLastConfig() {
+  const release = document.getElementById('inpRelease').value.trim();
+  const arch = document.getElementById('selArch').value;
+  const adaptation = document.getElementById('inpAdaptation').value.trim();
+  if (release) localStorage.setItem(CONFIG_KEYS.release, release);
+  localStorage.setItem(CONFIG_KEYS.arch, arch);
+  if (adaptation) localStorage.setItem(CONFIG_KEYS.adaptation, adaptation);
+}
+
+function restoreLastConfig() {
+  const release = localStorage.getItem(CONFIG_KEYS.release);
+  const arch = localStorage.getItem(CONFIG_KEYS.arch);
+  const adaptation = localStorage.getItem(CONFIG_KEYS.adaptation);
+  const selArch = document.getElementById('selArch');
+  if (release) document.getElementById('inpRelease').value = release;
+  if (arch && [...selArch.options].some(o => o.value === arch)) selArch.value = arch;
+  if (adaptation) document.getElementById('inpAdaptation').value = adaptation;
+}
+
+/* ===== Event wiring ===== */
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(window._searchTimer);
+  window._searchTimer = setTimeout(doSearch, 300);
+});
+document.getElementById('searchType').addEventListener('change', doSearch);
+document.getElementById('inpRelease').addEventListener('change', () => { saveLastConfig(); updateRepoList(); });
+document.getElementById('inpRelease').addEventListener('input', () => {
+  clearTimeout(window._releaseTimer);
+  window._releaseTimer = setTimeout(() => { saveLastConfig(); updateRepoList(); }, 400);
+});
+document.getElementById('selArch').addEventListener('change', () => { saveLastConfig(); updateRepoList(); });
+document.getElementById('inpAdaptation').addEventListener('change', () => {
+  const val = document.getElementById('inpAdaptation').value.trim();
+  if (val && !getAdaptations().includes(val)) {
+    saveAdaptation(val);
+    toast(t('adaptAdded'), 'success');
+  }
+  saveLastConfig();
+  updateRepoList();
+});
+document.getElementById('inpAdaptation').addEventListener('input', () => {
+  clearTimeout(window._adaptTimer);
+  window._adaptTimer = setTimeout(() => { saveLastConfig(); updateRepoList(); }, 400);
+});
+document.getElementById('inpAdaptation').addEventListener('blur', () => {
+  const val = document.getElementById('inpAdaptation').value.trim();
+  if (val && !getAdaptations().includes(val)) {
+    saveAdaptation(val);
+    toast(t('adaptAdded'), 'success');
+  }
+  saveLastConfig();
+});
+
+/* ===== Init ===== */
+(async function init() {
+  applyTranslations();
+  restoreLastConfig();
+  const urlParams = applyUrlParams();
+  if (getCorsProxies().length > 0) {
+    await loadReleases();
+  }
+  await updateRepoList();
+  if (urlParams.query) {
+    document.getElementById('searchInput').value = urlParams.query;
+    doSearch();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+https://corsproxy.io/?url=$url	header
+https://proxy.corsfix.com/?url=$url	corsfix
+https://api.cors.lol/?url=$url	header
+https://cors-anywhere.com/$url	header
+https://test.cors.workers.dev/?url=$url	corsHeaders
+https://api.allorigins.win/raw?url=$url	header
+https://api.thebugging.com/cors-proxy?url=$url	query
